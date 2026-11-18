@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% import "_macros.html" as components %}
+
+{% block title %}Approved Domains - SSLGuard{% endblock %}
+
+{% block content %}
+
+{# Page Header #}
+{{ components.page_header(
+    icon='globe',
+    title='Approved Domain Inventory',
+    subtitle=domains|length ~ ' approved domain' ~ ('s' if domains|length != 1 else ''),
+    action_url=url_for('add_domain'),
+    action_text='Add Domain',
+    action_icon='plus-lg'
+) }}
+
+{# Empty State #}
+{% if not domains %}
+    {{ components.empty_state(
+        message='No domains configured.',
+        cta_url=url_for('add_domain'),
+        cta_text='Add your first domain',
+        icon='globe'
+    ) }}
+{% else %}
+
+{# Toolbar #}
+<div class="toolbar">
+    <div class="row g-3">
+        <div class="col-md-4">
+            <input type="text" class="form-control" id="searchInput" 
+                   placeholder="Search hostname or owner..." aria-label="Search">
+        </div>
+        <div class="col-md-4">
+            <select class="form-select" id="ownerFilter" aria-label="Filter by owner">
+                <option value="">All Owners</option>
+                {% set owners = domains|map(attribute='owner')|unique|sort %}
+                {% for owner in owners %}
+                    <option value="{{ owner }}">{{ owner }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-outline-secondary w-100" onclick="clearFilters()">
+                <i class="bi bi-x-circle"></i> Clear
+            </button>
+        </div>
+    </div>
+</div>
+
+{# Domains Table #}
+{{ components.table_card_start() }}
+<table class="table table-hover mb-0" id="domainsTable">
+    <thead class="table-dark">
+        <tr>
+            {{ components.sortable_th('hostname', 'Hostname', icon='globe', default_sort=true) }}
+            {{ components.th_responsive('Port', hide_mobile=true) }}
+            {{ components.sortable_th('owner', 'Owner', icon='person') }}
+            {{ components.th_responsive('Added', hide_mobile=true) }}
+            <th class="text-end">Actions</th>
+        </tr>
+    </thead>
+    <tbody id="domainsTableBody">
+        {% for domain in domains %}
+            <tr data-hostname="{{ domain.hostname|lower }}" 
+                data-owner="{{ domain.owner }}"
+                data-created="{{ domain.created_at.strftime('%Y%m%d') }}">
+                <td>
+                    <strong>{{ domain.hostname }}</strong>
+                    {# Show port on mobile as secondary text #}
+                    <div class="d-md-none text-muted-soft">
+                        Port {{ domain.port }}
+                    </div>
+                </td>
+                {{ components.td_responsive(
+                    ('<span class="' ~ ('port-default' if domain.port == 443 else 'port-muted') ~ '">' ~ domain.port ~ '</span>')|safe,
+                    hide_mobile=true
+                ) }}
+                <td>
+                    <span class="text-muted-soft">{{ domain.owner }}</span>
+                </td>
+                {{ components.td_responsive(
+                    components.format_date(domain.created_at),
+                    hide_mobile=true
+                ) }}
+                <td class="actions-cell">
+                    {{ components.row_actions(
+                        primary_url=url_for('edit_domain', domain_id=domain.id),
+                        primary_text='Edit',
+                        primary_icon='pencil-square',
+                        primary_aria='Edit ' ~ domain.hostname,
+                        dropdown_items=[
+                            {'icon': 'trash', 'text': 'Delete Domain', 'variant': 'danger', 'modal': 'deleteModal' ~ domain.id}
+                        ],
+                        item_id=domain.id,
+                        item_name=domain.hostname
+                    ) }}
+                </td>
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{{ components.table_card_end() }}
+
+{# No Results Message #}
+<div id="noResultsMessage" class="alert alert-info" style="display: none;">
+    <i class="bi bi-search"></i> No domains match the current filters.
+</div>
+
+{# Delete Modals #}
+{% for domain in domains %}
+    {{ components.confirm_delete_modal(
+        modal_id='deleteModal' ~ domain.id,
+        item_name=domain.hostname ~ ':' ~ domain.port,
+        item_type='domain',
+        delete_url=url_for('delete_domain', domain_id=domain.id)
+    ) }}
+{% endfor %}
+
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Initialize tooltips
+    document.addEventListener('DOMContentLoaded', function() {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+        
+        // Setup sortable headers
+        let currentSort = { column: 'hostname', direction: 'asc' };
+        
+        document.querySelectorAll('th.sortable').forEach(header => {
+            header.addEventListener('click', function() {
+                sortTable(this.dataset.column);
+            });
+        });
+        
+        // Setup filters
+        document.getElementById('searchInput').addEventListener('input', applyFilters);
+        document.getElementById('ownerFilter').addEventListener('change', applyFilters);
+    });
+    
+    function applyFilters() {
+        const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+        const ownerFilter = document.getElementById('ownerFilter').value;
+        const rows = document.querySelectorAll('#domainsTableBody tr');
+        
+        let visibleCount = 0;
+        
+        rows.forEach(row => {
+            const hostname = row.dataset.hostname;
+            const owner = row.dataset.owner;
+            
+            const matchesSearch = !searchTerm || hostname.includes(searchTerm) || owner.toLowerCase().includes(searchTerm);
+            const matchesOwner = !ownerFilter || owner === ownerFilter;
+            
+            if (matchesSearch && matchesOwner) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+        
+        document.getElementById('noResultsMessage').style.display = visibleCount === 0 ? 'block' : 'none';
+        document.getElementById('domainsTable').parentElement.parentElement.style.display = visibleCount === 0 ? 'none' : 'block';
+    }
+    
+    function clearFilters() {
+        document.getElementById('searchInput').value = '';
+        document.getElementById('ownerFilter').value = '';
+        applyFilters();
+    }
+    
+    function sortTable(column) {
+        const tbody = document.getElementById('domainsTableBody');
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        
+        if (currentSort.column === column) {
+            currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+        } else {
+            currentSort.column = column;
+            currentSort.direction = 'asc';
+        }
+        
+        // Update header indicators
+        document.querySelectorAll('th.sortable').forEach(th => {
+            th.classList.remove('sorted-asc', 'sorted-desc');
+        });
+        const header = document.querySelector(`th[data-column="${column}"]`);
+        header.classList.add(`sorted-${currentSort.direction}`);
+        
+        rows.sort((a, b) => {
+            let aVal, bVal;
+            
+            if (column === 'hostname') {
+                aVal = a.dataset.hostname;
+                bVal = b.dataset.hostname;
+            } else if (column === 'owner') {
+                aVal = a.dataset.owner;
+                bVal = b.dataset.owner;
+            } else if (column === 'created') {
+                aVal = a.dataset.created;
+                bVal = b.dataset.created;
+            }
+            
+            if (currentSort.direction === 'asc') {
+                return aVal > bVal ? 1 : -1;
+            } else {
+                return aVal < bVal ? 1 : -1;
+            }
+        });
+        
+        rows.forEach(row => tbody.appendChild(row));
+    }
+</script>
+{% endblock %}

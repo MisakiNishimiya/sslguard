@@ -1,0 +1,222 @@
+{# SSLGuard Shared Component Macros #}
+
+{# Page Header Component: Icon + Title + Optional Subtitle + Optional Action Button #}
+{% macro page_header(icon, title, subtitle='', action_url='', action_text='', action_icon='') %}
+<div class="page-header">
+    <div class="page-header-content">
+        <h1><i class="bi bi-{{ icon }}"></i> {{ title }}</h1>
+        {% if subtitle %}
+            <p class="page-subtitle">{{ subtitle }}</p>
+        {% endif %}
+    </div>
+    {% if action_url %}
+        <div class="page-header-action">
+            <a href="{{ action_url }}" class="btn btn-primary">
+                {% if action_icon %}<i class="bi bi-{{ action_icon }}"></i> {% endif %}{{ action_text }}
+            </a>
+        </div>
+    {% endif %}
+</div>
+{% endmacro %}
+
+
+{# Table Card Component: Wraps tables in consistent card styling #}
+{% macro table_card_start() %}
+<div class="card table-card">
+    <div class="table-responsive">
+{% endmacro %}
+
+{% macro table_card_end() %}
+    </div>
+</div>
+{% endmacro %}
+
+
+{# Row Actions Component: Primary action + dropdown menu #}
+{% macro row_actions(primary_url='', primary_text='Edit', primary_icon='pencil-square', primary_aria='', 
+                      dropdown_items=[], item_id='', item_name='', disabled=false, disabled_tooltip='') %}
+<div class="btn-group btn-group-sm" role="group">
+    {% if primary_url %}
+        <a href="{{ primary_url }}" 
+           class="btn btn-outline-secondary"
+           aria-label="{{ primary_aria or (primary_text + ' ' + item_name) }}">
+            <i class="bi bi-{{ primary_icon }}"></i> {{ primary_text }}
+        </a>
+    {% endif %}
+    
+    <div class="btn-group btn-group-sm" role="group">
+        <button type="button" 
+                class="btn btn-outline-secondary dropdown-toggle dropdown-toggle-split" 
+                data-bs-toggle="dropdown" 
+                aria-expanded="false"
+                aria-label="More actions for {{ item_name }}"
+                {% if disabled %}disabled title="{{ disabled_tooltip }}"{% endif %}>
+            <span class="visually-hidden">More actions</span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+            {% for item in dropdown_items %}
+                {% if item.divider %}
+                    <li><hr class="dropdown-divider"></li>
+                {% elif item.disabled %}
+                    <li>
+                        <a class="dropdown-item text-{{ item.variant or 'secondary' }} disabled" 
+                           href="#" 
+                           tabindex="-1" 
+                           aria-disabled="true"
+                           title="{{ item.tooltip or '' }}">
+                            <i class="bi bi-{{ item.icon }}"></i> {{ item.text }}
+                        </a>
+                    </li>
+                {% elif item.modal %}
+                    <li>
+                        <a class="dropdown-item text-{{ item.variant or 'secondary' }}" 
+                           href="#" 
+                           data-bs-toggle="modal" 
+                           data-bs-target="#{{ item.modal }}"
+                           aria-label="{{ item.text }} {{ item_name }}">
+                            <i class="bi bi-{{ item.icon }}"></i> {{ item.text }}
+                        </a>
+                    </li>
+                {% elif item.form_action %}
+                    <li>
+                        <form action="{{ item.form_action }}" method="POST" style="display: inline;">
+                            <button type="submit" class="dropdown-item text-{{ item.variant or 'secondary' }}">
+                                <i class="bi bi-{{ item.icon }}"></i> {{ item.text }}
+                            </button>
+                        </form>
+                    </li>
+                {% endif %}
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endmacro %}
+
+
+{# Confirm Delete Modal #}
+{% macro confirm_delete_modal(modal_id, item_name, item_type, delete_url) %}
+<div class="modal fade" id="{{ modal_id }}" tabindex="-1" aria-labelledby="{{ modal_id }}Label" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header modal-header-danger">
+                <h5 class="modal-title" id="{{ modal_id }}Label">
+                    <i class="bi bi-exclamation-triangle"></i> Confirm Delete
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete {{ item_type }} <strong>{{ item_name }}</strong>?</p>
+                <p class="text-danger mb-0">
+                    <i class="bi bi-exclamation-circle"></i> This action cannot be undone.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form action="{{ delete_url }}" method="POST" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash"></i> Delete {{ item_type|title }}
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+
+{# Toolbar Component: Search + Filters + Clear #}
+{% macro toolbar(search_placeholder='Search...', filters=[]) %}
+<div class="toolbar">
+    <div class="row g-3">
+        <div class="col-md-4">
+            <input type="text" class="form-control" id="searchInput" 
+                   placeholder="{{ search_placeholder }}" aria-label="Search">
+        </div>
+        {% for filter in filters %}
+            <div class="col-md-{{ filter.col_size or 3 }}">
+                <select class="form-select" id="{{ filter.id }}" aria-label="{{ filter.label }}">
+                    <option value="">{{ filter.label }}</option>
+                    {% for option in filter.options %}
+                        <option value="{{ option.value }}">{{ option.text }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        {% endfor %}
+        <div class="col-md-2">
+            <button class="btn btn-outline-secondary w-100" onclick="clearFilters()">
+                <i class="bi bi-x-circle"></i> Clear
+            </button>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+
+{# Date Formatter: Display date with ISO tooltip #}
+{% macro format_date(date_obj, timezone='UTC') %}
+{% if date_obj %}
+    <span title="{{ date_obj.strftime('%Y-%m-%d %H:%M') }} {{ timezone }}" data-bs-toggle="tooltip">
+        {{ date_obj.strftime('%b %d, %Y') }}
+    </span>
+{% else %}
+    <span class="text-muted">—</span>
+{% endif %}
+{% endmacro %}
+
+
+{# Empty State Component #}
+{% macro empty_state(message, cta_url='', cta_text='', icon='inbox') %}
+<div class="alert alert-info empty-state">
+    <div class="empty-state-icon">
+        <i class="bi bi-{{ icon }}"></i>
+    </div>
+    <div class="empty-state-message">
+        {{ message }}
+        {% if cta_url %}
+            <a href="{{ cta_url }}" class="alert-link">{{ cta_text }}</a>
+        {% endif %}
+    </div>
+</div>
+{% endmacro %}
+
+
+{# Status Badge Component #}
+{% macro status_badge(status, label='', icon='', variant='') %}
+{% set badge_config = {
+    'expired': {'variant': 'danger', 'icon': 'x-circle', 'label': 'Expired'},
+    'critical': {'variant': 'critical', 'icon': 'exclamation-triangle-fill', 'label': 'Critical'},
+    'warning': {'variant': 'warning', 'icon': 'exclamation-triangle', 'label': 'Warning'},
+    'valid': {'variant': 'success', 'icon': 'shield-check', 'label': 'Valid'},
+    'error': {'variant': 'secondary', 'icon': 'exclamation-circle', 'label': 'Error'}
+} %}
+{% set config = badge_config.get(status, {'variant': variant or 'secondary', 'icon': icon or 'circle', 'label': label or status}) %}
+<span class="badge bg-{{ config.variant }}">
+    <i class="bi bi-{{ config.icon }}"></i> {{ config.label }}
+</span>
+{% endmacro %}
+
+
+{# Sortable Table Header #}
+{% macro sortable_th(column_id, label, icon='', default_sort=false) %}
+<th class="sortable{% if default_sort %} sorted-asc{% endif %}" 
+    data-column="{{ column_id }}" 
+    aria-label="Sort by {{ label }}">
+    {% if icon %}<i class="bi bi-{{ icon }}"></i> {% endif %}{{ label }}
+</th>
+{% endmacro %}
+
+
+{# Mobile-Responsive Table Header (hide on small screens) #}
+{% macro th_responsive(label, icon='', hide_mobile=false) %}
+<th{% if hide_mobile %} class="d-none d-md-table-cell"{% endif %}>
+    {% if icon %}<i class="bi bi-{{ icon }}"></i> {% endif %}{{ label }}
+</th>
+{% endmacro %}
+
+
+{# Mobile-Responsive Table Cell (hide on small screens) #}
+{% macro td_responsive(content, hide_mobile=false) %}
+<td{% if hide_mobile %} class="d-none d-md-table-cell"{% endif %}>
+    {{ content }}
+</td>
+{% endmacro %}

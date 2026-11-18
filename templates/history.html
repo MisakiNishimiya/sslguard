@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block title %}Scan History - SSLGuard{% endblock %}
+
+{% block content %}
+<h1><i class="bi bi-clock-history"></i> Scan History: {{ domain.hostname }}</h1>
+
+<div class="mb-4">
+    <p class="text-muted">
+        Owner: <strong>{{ domain.owner }}</strong> | 
+        Port: <strong>{{ domain.port }}</strong>
+    </p>
+</div>
+
+{% if not scans %}
+    <div class="alert alert-info">
+        No scans yet. <a href="{{ url_for('dashboard') }}">Go to dashboard to run a scan</a>.
+    </div>
+{% else %}
+    <div class="table-responsive">
+        <table class="table table-hover">
+            <thead class="table-dark">
+                <tr>
+                    <th>Scan Time</th>
+                    <th>Status</th>
+                    <th>Issuer</th>
+                    <th>Valid To</th>
+                    <th>Chain Status</th>
+                    <th>Hostname Valid</th>
+                    <th>Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for scan in scans %}
+                    <tr>
+                        <td><small>{{ scan.scan_time.strftime('%Y-%m-%d %H:%M:%S') }}</small></td>
+                        <td>
+                            {% if scan.error %}
+                                <span class="badge bg-danger"><i class="bi bi-exclamation-circle"></i> Error</span>
+                            {% elif scan.expiry_status == 'Valid' %}
+                                <span class="badge bg-success"><i class="bi bi-shield-check"></i> Valid</span>
+                            {% elif scan.expiry_status == 'Expiring Soon' %}
+                                <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i> Expiring Soon</span>
+                            {% elif scan.expiry_status == 'Expired' %}
+                                <span class="badge bg-danger"><i class="bi bi-shield-x"></i> Expired</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <small>
+                                {% if scan.issuer %}
+                                    {{ scan.issuer[:40] }}...
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </small>
+                        </td>
+                        <td>
+                            <small>
+                                {% if scan.valid_to %}
+                                    {{ scan.valid_to.strftime('%Y-%m-%d') }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </small>
+                        </td>
+                        <td>
+                            {% if scan.error %}
+                                —
+                            {% else %}
+                                <small>{{ scan.chain_status }}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if scan.error %}
+                                —
+                            {% else %}
+                                {% if scan.hostname_valid %}
+                                    <span class="badge bg-success"><i class="bi bi-check-circle"></i></span>
+                                {% else %}
+                                    <span class="badge bg-danger"><i class="bi bi-x-circle"></i></span>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-secondary" 
+                                    data-bs-toggle="collapse" 
+                                    data-bs-target="#scan{{ scan.id }}">
+                                <i class="bi bi-chevron-down"></i> Show
+                            </button>
+                        </td>
+                    </tr>
+                    <tr class="collapse" id="scan{{ scan.id }}">
+                        <td colspan="7">
+                            {% if scan.error %}
+                                <div class="alert alert-danger m-0">
+                                    <strong><i class="bi bi-exclamation-circle"></i> Error:</strong> {{ scan.error }}
+                                </div>
+                            {% else %}
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <p><strong>Subject:</strong> <small>{{ scan.subject }}</small></p>
+                                        <p><strong>Issuer:</strong> <small>{{ scan.issuer }}</small></p>
+                                        <p><strong>Valid From:</strong> {{ scan.valid_from.strftime('%Y-%m-%d') }}</p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <p><strong>Valid To:</strong> {{ scan.valid_to.strftime('%Y-%m-%d') }}</p>
+                                        <p><strong>SHA-256 Fingerprint:</strong></p>
+                                        <code style="font-size: 0.8rem;">{{ scan.fingerprint_sha256 }}</code>
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endif %}
+
+<div class="mt-4">
+    <a href="{{ url_for('dashboard') }}" class="btn btn-secondary"><i class="bi bi-chevron-left"></i> Back to Dashboard</a>
+</div>
+{% endblock %}

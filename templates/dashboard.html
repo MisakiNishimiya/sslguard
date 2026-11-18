@@ -1,0 +1,386 @@
+{% extends "base.html" %}
+{% import "_macros.html" as components %}
+
+{% block title %}Dashboard - SSLGuard{% endblock %}
+
+{% block content %}
+
+{# Page Header #}
+{{ components.page_header(
+    icon='speedometer2',
+    title='Certificate Status Dashboard',
+    subtitle=domain_data|length ~ ' domain' ~ ('s' if domain_data|length != 1 else '') ~ ' monitored'
+) }}
+
+{% if not domain_data %}
+    {{ components.empty_state(
+        message='No domains configured.',
+        cta_url=url_for('add_domain') if current_user.is_admin() else '',
+        cta_text='Add your first domain',
+        icon='speedometer2'
+    ) }}
+{% else %}
+
+{# Summary Cards #}
+<div class="summary-cards">
+    <div class="summary-card expired" onclick="filterByStatus('expired')" data-status="expired" role="button" tabindex="0" aria-label="Filter by expired certificates">
+        <div class="card-label">
+            <i class="bi bi-x-circle"></i> Expired
+        </div>
+        <div class="card-count">{{ summary.expired }}</div>
+    </div>
+    
+    <div class="summary-card critical" onclick="filterByStatus('critical')" data-status="critical" role="button" tabindex="0" aria-label="Filter by critical certificates">
+        <div class="card-label">
+            <i class="bi bi-exclamation-triangle-fill"></i> Critical (≤7d)
+        </div>
+        <div class="card-count">{{ summary.critical }}</div>
+    </div>
+    
+    <div class="summary-card warning" onclick="filterByStatus('warning')" data-status="warning" role="button" tabindex="0" aria-label="Filter by warning certificates">
+        <div class="card-label">
+            <i class="bi bi-exclamation-triangle"></i> Warning (8-30d)
+        </div>
+        <div class="card-count">{{ summary.warning }}</div>
+    </div>
+    
+    <div class="summary-card valid" onclick="filterByStatus('valid')" data-status="valid" role="button" tabindex="0" aria-label="Filter by valid certificates">
+        <div class="card-label">
+            <i class="bi bi-shield-check"></i> Valid
+        </div>
+        <div class="card-count">{{ summary.valid }}</div>
+    </div>
+    
+    <div class="summary-card error" onclick="filterByStatus('error')" data-status="error" role="button" tabindex="0" aria-label="Filter by scan errors">
+        <div class="card-label">
+            <i class="bi bi-exclamation-circle"></i> Scan Errors
+        </div>
+        <div class="card-count">{{ summary.error }}</div>
+    </div>
+</div>
+
+{# Toolbar #}
+<div class="toolbar">
+    <div class="row g-3">
+        <div class="col-md-4">
+            <input type="text" class="form-control" id="searchInput" 
+                   placeholder="Search domain or team..." aria-label="Search domains">
+        </div>
+        <div class="col-md-3">
+            <select class="form-select" id="statusFilter" aria-label="Filter by status">
+                <option value="">All Statuses</option>
+                <option value="expired">Expired</option>
+                <option value="critical">Critical (≤7 days)</option>
+                <option value="warning">Warning (8-30 days)</option>
+                <option value="valid">Valid</option>
+                <option value="error">Scan Errors</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <select class="form-select" id="ownerFilter" aria-label="Filter by team">
+                <option value="">All Teams</option>
+                {% set owners = domain_data|map(attribute='domain.owner')|unique|sort %}
+                {% for owner in owners %}
+                    <option value="{{ owner }}">{{ owner }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-outline-secondary w-100" onclick="clearFilters()">
+                <i class="bi bi-x-circle"></i> Clear
+            </button>
+        </div>
+    </div>
+</div>
+
+{# Scan All Button (for admins) #}
+{% if current_user.is_admin() %}
+<div class="mb-3 text-end">
+    <button class="btn btn-primary" onclick="scanAll()" id="scanAllBtn">
+        <i class="bi bi-arrow-repeat"></i> Scan All Domains
+    </button>
+</div>
+{% endif %}
+
+{# Domains Table #}
+{{ components.table_card_start() }}
+<table class="table table-hover mb-0" id="domainsTable">
+    <thead class="table-dark">
+        <tr>
+            {{ components.sortable_th('domain', 'Domain', icon='globe') }}
+            <th>Status</th>
+            {{ components.sortable_th('days', 'Days Until Expiry', default_sort=true) }}
+            {{ components.th_responsive('Issued By', hide_mobile=true) }}
+            {{ components.th_responsive('Last Scanned', hide_mobile=true) }}
+            <th class="text-end">Actions</th>
+        </tr>
+    </thead>
+    <tbody id="domainsTableBody">
+        {% for item in domain_data %}
+            <tr data-status="{{ item.status }}" 
+                data-owner="{{ item.domain.owner }}" 
+                data-domain="{{ item.domain.hostname|lower }}" 
+                data-days="{{ item.days_until_expiry if item.days_until_expiry is not none else 999999 }}">
+                <td>
+                    <strong>{{ item.domain.hostname }}</strong>
+                    <div class="text-muted-soft" style="font-size: 0.85rem;">
+                        {{ item.domain.owner }}
+                    </div>
+                </td>
+                <td>
+                    {{ components.status_badge(item.status, label=item.status_label) }}
+                </td>
+                <td>
+                    {% if item.status == 'expired' %}
+                        <div class="days-expired">{{ item.days_display }}</div>
+                        {% if item.expiry_date %}
+                            <div class="expiry-date">{{ item.expiry_date.strftime('%b %d, %Y') }}</div>
+                        {% endif %}
+                    {% elif item.status in ['critical', 'warning'] %}
+                        <div class="days-{{ item.status }}">{{ item.days_display }}</div>
+                        {% if item.expiry_date %}
+                            <div class="expiry-date">{{ item.expiry_date.strftime('%b %d, %Y') }}</div>
+                        {% endif %}
+                    {% elif item.status == 'valid' and item.days_until_expiry is not none %}
+                        <div>{{ item.days_display }}</div>
+                        {% if item.expiry_date %}
+                            <div class="expiry-date">{{ item.expiry_date.strftime('%b %d, %Y') }}</div>
+                        {% endif %}
+                    {% else %}
+                        <span class="text-muted">{{ item.days_display }}</span>
+                    {% endif %}
+                </td>
+                {{ components.td_responsive(
+                    ('<span title="' ~ item.issuer_full ~ '" data-bs-toggle="tooltip">' ~ item.issuer_short ~ '</span>' +
+                     ('<br><small class="text-danger error-message" title="' ~ item.error_message ~ '">' ~ 
+                      (item.error_message[:50] if item.error_message else '') ~ 
+                      ('...' if item.error_message and item.error_message|length > 50 else '') ~ 
+                      '</small>' if item.error_message else ''))|safe,
+                    hide_mobile=true
+                ) }}
+                {{ components.td_responsive(
+                    components.format_date(item.last_scanned) if item.last_scanned else '<span class="text-muted">Never</span>',
+                    hide_mobile=true
+                ) }}
+                <td class="actions-cell">
+                    {% if current_user.is_admin() %}
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="button" class="btn btn-outline-secondary" 
+                                    onclick="scanDomain({{ item.domain.id }})"
+                                    aria-label="Scan {{ item.domain.hostname }}">
+                                <i class="bi bi-arrow-repeat"></i> Scan
+                            </button>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <button type="button" class="btn btn-outline-secondary dropdown-toggle dropdown-toggle-split" 
+                                        data-bs-toggle="dropdown" aria-expanded="false">
+                                    <span class="visually-hidden">More actions</span>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li>
+                                        <a class="dropdown-item" href="{{ url_for('scan_history', domain_id=item.domain.id) }}">
+                                            <i class="bi bi-clock-history"></i> View History
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    {% else %}
+                        <a href="{{ url_for('scan_history', domain_id=item.domain.id) }}" 
+                           class="btn btn-sm btn-outline-secondary"
+                           aria-label="View scan history for {{ item.domain.hostname }}">
+                            <i class="bi bi-clock-history"></i> History
+                        </a>
+                    {% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{{ components.table_card_end() }}
+
+{# No Results Message #}
+<div id="noResultsMessage" class="alert alert-info" style="display: none;">
+    <i class="bi bi-search"></i> No domains match the current filters.
+</div>
+
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Initialize tooltips
+    document.addEventListener('DOMContentLoaded', function() {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+        
+        // Make summary cards keyboard accessible
+        document.querySelectorAll('.summary-card').forEach(card => {
+            card.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    this.click();
+                }
+            });
+        });
+        
+        // Setup sortable headers
+        let currentSort = { column: 'days', direction: 'asc' };
+        
+        document.querySelectorAll('th.sortable').forEach(header => {
+            header.addEventListener('click', function() {
+                sortTable(this.dataset.column);
+            });
+        });
+        
+        // Setup filters
+        document.getElementById('searchInput').addEventListener('input', applyFilters);
+        document.getElementById('statusFilter').addEventListener('change', applyFilters);
+        document.getElementById('ownerFilter').addEventListener('change', applyFilters);
+    });
+    
+    // Filter by status from summary cards
+    function filterByStatus(status) {
+        const card = document.querySelector(`.summary-card[data-status="${status}"]`);
+        const isActive = card.classList.contains('active');
+        
+        // Remove active from all cards
+        document.querySelectorAll('.summary-card').forEach(c => c.classList.remove('active'));
+        
+        if (isActive) {
+            document.getElementById('statusFilter').value = '';
+        } else {
+            card.classList.add('active');
+            document.getElementById('statusFilter').value = status;
+        }
+        
+        applyFilters();
+    }
+    
+    // Apply all filters
+    function applyFilters() {
+        const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+        const statusFilter = document.getElementById('statusFilter').value;
+        const ownerFilter = document.getElementById('ownerFilter').value;
+        const rows = document.querySelectorAll('#domainsTableBody tr');
+        
+        let visibleCount = 0;
+        
+        rows.forEach(row => {
+            const domain = row.dataset.domain;
+            const owner = row.dataset.owner;
+            const status = row.dataset.status;
+            
+            const matchesSearch = !searchTerm || domain.includes(searchTerm) || owner.toLowerCase().includes(searchTerm);
+            const matchesStatus = !statusFilter || status === statusFilter;
+            const matchesOwner = !ownerFilter || owner === ownerFilter;
+            
+            if (matchesSearch && matchesStatus && matchesOwner) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+        
+        document.getElementById('noResultsMessage').style.display = visibleCount === 0 ? 'block' : 'none';
+        document.getElementById('domainsTable').parentElement.parentElement.style.display = visibleCount === 0 ? 'none' : 'block';
+    }
+    
+    function clearFilters() {
+        document.getElementById('searchInput').value = '';
+        document.getElementById('statusFilter').value = '';
+        document.getElementById('ownerFilter').value = '';
+        document.querySelectorAll('.summary-card').forEach(c => c.classList.remove('active'));
+        applyFilters();
+    }
+    
+    function sortTable(column) {
+        const tbody = document.getElementById('domainsTableBody');
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        let currentSort = { column: column, direction: 'asc' };
+        
+        const header = document.querySelector(`th[data-column="${column}"]`);
+        if (header.classList.contains('sorted-asc')) {
+            currentSort.direction = 'desc';
+        }
+        
+        document.querySelectorAll('th.sortable').forEach(th => {
+            th.classList.remove('sorted-asc', 'sorted-desc');
+        });
+        header.classList.add(`sorted-${currentSort.direction}`);
+        
+        rows.sort((a, b) => {
+            let aVal, bVal;
+            
+            if (column === 'domain') {
+                aVal = a.dataset.domain;
+                bVal = b.dataset.domain;
+            } else if (column === 'days') {
+                aVal = parseInt(a.dataset.days);
+                bVal = parseInt(b.dataset.days);
+            }
+            
+            if (currentSort.direction === 'asc') {
+                return aVal > bVal ? 1 : -1;
+            } else {
+                return aVal < bVal ? 1 : -1;
+            }
+        });
+        
+        rows.forEach(row => tbody.appendChild(row));
+    }
+    
+    {% if current_user.is_admin() %}
+    function scanDomain(domainId) {
+        const btn = event.target.closest('button') || event.target.closest('.btn');
+        const originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Scanning...';
+        
+        fetch(`/domain/${domainId}/scan`, { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Scan failed: ' + (data.error || 'Unknown error'));
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                }
+            })
+            .catch(error => {
+                alert('Error: ' + error);
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            });
+    }
+    
+    function scanAll() {
+        const btn = document.getElementById('scanAllBtn');
+        const originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Scanning All...';
+        
+        fetch('/scan-all', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Scan failed: ' + (data.error || 'Unknown error'));
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                }
+            })
+            .catch(error => {
+                alert('Error: ' + error);
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            });
+    }
+    {% endif %}
+</script>
+{% endblock %}

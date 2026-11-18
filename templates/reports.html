@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% import "_macros.html" as components %}
+
+{% block title %}Reports - SSLGuard{% endblock %}
+
+{% block content %}
+
+{# Page Header #}
+{{ components.page_header(
+    icon='file-earmark-text',
+    title='Remediation Reports',
+    subtitle='Export certificate status and remediation guidance for monitored domains'
+) }}
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card table-card" style="height: 100%;">
+            <div class="card-body">
+                <h5 class="mb-3">
+                    <i class="bi bi-file-earmark-text"></i> Export Remediation Report
+                </h5>
+                <p>Download a comprehensive report of all domains with issues and recommended corrective actions.</p>
+                
+                <div class="d-flex gap-2 mt-4">
+                    <a href="{{ url_for('export_csv') }}" class="btn btn-primary flex-grow-1">
+                        <i class="bi bi-filetype-csv"></i> CSV Export
+                    </a>
+                    <a href="{{ url_for('export_pdf') }}" class="btn btn-outline-secondary flex-grow-1">
+                        <i class="bi bi-file-earmark-pdf"></i> PDF Export
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card table-card" style="height: 100%;">
+            <div class="card-body">
+                <h5 class="mb-3">
+                    <i class="bi bi-info-circle"></i> Report Information
+                </h5>
+                <p>The remediation report includes:</p>
+                <ul class="mb-3">
+                    <li>Domain and port information</li>
+                    <li>Certificate owner</li>
+                    <li>Identified issues</li>
+                    <li>Current status</li>
+                    <li>Recommended corrective actions</li>
+                </ul>
+                <p class="text-muted small mb-0">Reports are generated from the latest scan data for each domain.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card table-card">
+            <div class="card-body">
+                <h5 class="mb-3">
+                    <i class="bi bi-shield-check"></i> Common Issues & Solutions
+                </h5>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width: 40%;">Issue</th>
+                                <th>Recommended Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>
+                                    <span class="badge bg-danger">
+                                        <i class="bi bi-x-circle"></i> Certificate Expired
+                                    </span>
+                                </td>
+                                <td>Renew the certificate immediately</td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <span class="badge bg-critical">
+                                        <i class="bi bi-exclamation-triangle-fill"></i> Expiring Soon (≤7 days)
+                                    </span>
+                                </td>
+                                <td>Urgent: Renew certificate before expiry date</td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <span class="badge bg-warning text-dark">
+                                        <i class="bi bi-exclamation-triangle"></i> Expiring Soon (8-30 days)
+                                    </span>
+                                </td>
+                                <td>Plan a renewal before expiry date</td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <span class="badge bg-secondary">
+                                        <i class="bi bi-exclamation-circle"></i> Self-signed Certificate
+                                    </span>
+                                </td>
+                                <td>Replace with a CA-signed certificate</td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <span class="badge bg-secondary">
+                                        <i class="bi bi-exclamation-circle"></i> Untrusted Root CA
+                                    </span>
+                                </td>
+                                <td>Install the full certificate chain</td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <span class="badge bg-secondary">
+                                        <i class="bi bi-exclamation-circle"></i> Incomplete Chain
+                                    </span>
+                                </td>
+                                <td>Install all intermediate certificates</td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <span class="badge bg-secondary">
+                                        <i class="bi bi-exclamation-circle"></i> Hostname Mismatch
+                                    </span>
+                                </td>
+                                <td>Reissue the certificate with the correct domain name</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
